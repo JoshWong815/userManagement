@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>菜鸟教程(runoob.com)</title>
+</head>
+<body>
+
+<h1>我的第一个标题</h1>
+<table border="2">
+    <caption>
+        用户列表
+    </caption>
+    <tr>
+        <th>id</th><th>姓名</th><th>密码</th><th>性别</th><th>年龄</th><th>用户类型</th>
+
+    </tr>
+    {{range .json}}
+        <tr>
+        <td>{{.Id}}</td>
+        <td>{{.Name}}</td>
+        <td>{{.Password}}</td>
+        <td>{{.Sex}}</td>
+        <td>{{.Age}}</td>
+        <td>{{.Usertype}}</td>
+        </tr>
+    {{end}}
+
+</table>
+
+</body>
+</html>
