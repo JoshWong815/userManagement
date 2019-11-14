@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"github.com/astaxie/beego/orm"
+	_ "github.com/go-redis/redis"
+
 	//"os"
 
 	//"fmt"
@@ -13,6 +15,8 @@ import (
 	"user/models"
 	// "github.com/astaxie/beego/orm"
 	"github.com/astaxie/beego"
+
+
 )
 
 //  UserController operations for User
@@ -38,37 +42,59 @@ func (c *UserController) URLMapping() {
 func (c *UserController) Login(){
 	c.TplName="login.html"
 }
-func (c *UserController) LoginTest(){
+func (c *UserController) LoginTest() {
 	//c.TplName="login.html"
 
-	name:=c.Input().Get("username")
-	password:=c.Input().Get("password")
-	//u:=models.User{Name:name,Password:password}
-	//u.Name=name
-	//u.Password=password
-	o:=orm.NewOrm()
-	//user := new(models.User)
-	var user models.User
-	qs := o.QueryTable(user)
-	err:=qs.Filter("name", name).Filter("password",password).One(&user)
-	//err:=o.Read(&u)
-	if err ==nil{
-		//fmt.Println(user.name,user.Password)
-		c.SetSession("userName",name)
-		c.Redirect("/index",302)
+	client:=getRedisConnected()
 
-	} else if err == orm.ErrNoRows{
-		str:="用户名或密码输入错误!"
-		c.Data["info"]=str
-		c.TplName="login.html"
-		//fmt.Println("用户名或密码输入错误")
-		//fmt.Println(user.Age)
+	name := c.Input().Get("username")
+	password := c.Input().Get("password")
 
-	}else if err==orm.ErrMissPK{
-		fmt.Println("找不到主键")
-		c.Redirect("/login",302)
+	passwordInRedis,_ := client.Get(name).Result()
+
+	if passwordInRedis == password {
+		fmt.Println("这次登陆是从redis中查的密码")
+		c.SetSession("userName", name)
+		c.Redirect("/index", 302)
+	} else  {
+
+		o := orm.NewOrm()
+
+		var user models.User
+		qs := o.QueryTable(user)
+		err1 := qs.Filter("name", name).Filter("password", password).One(&user)
+
+		if err1 == nil {
+			//fmt.Println(user.name,user.Password)
+			c.SetSession("userName", name)
+			c.Redirect("/index", 302)
+
+			//使用redis缓存用户的登录名和密码
+
+			err1 := client.Set(name, password, 0).Err()
+			if err1 != nil {
+				panic(err1)
+			}
+
+			val, err2 := client.Get(name).Result()
+			if err2!= nil {
+				panic(err2)
+			}
+			fmt.Println(name, val)
+
+		} else if err1 == orm.ErrNoRows {
+			str := "用户名或密码输入错误!"
+			c.Data["info"] = str
+			c.TplName = "login.html"
+			//fmt.Println("用户名或密码输入错误")
+			//fmt.Println(user.Age)
+
+		} else if err1 == orm.ErrMissPK {
+			fmt.Println("找不到主键")
+			c.Redirect("/login", 302)
+		}
+
 	}
-
 }
 func (c *UserController) Logout(){
 	c.DelSession("userName")
@@ -113,8 +139,15 @@ func (c *UserController) UpdateUser(){
 			c.Redirect("/update/"+id , 302)
 		}
 		if err := models.UpdateUserById(&u); err == nil {
-			//fmt.Println("修改成功！")
+
+			client:=getRedisConnected()
+			errRedisUpdate:=client.Set(u.Name,u.Password,0).Err()
+			if errRedisUpdate!=nil{
+				panic(errRedisUpdate)
+			}
+
 			c.Redirect("/getAll", 302)
+
 		} else {
 			c.Redirect("/update/"+id , 302)
 		}
